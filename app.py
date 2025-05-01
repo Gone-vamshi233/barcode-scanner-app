@@ -4,7 +4,8 @@ from flask_login import LoginManager, login_user, logout_user, login_required, U
 from flask_bcrypt import Bcrypt
 from flask_mail import Mail, Message
 from twilio.rest import Client
-from apscheduler.schedulers.background import BackgroundScheduler
+pip install flask flask-login flask-bcrypt flask-mail pandas openpyxl twilio gunicorn apscheduler
+
 import sqlite3
 import pandas as pd
 from werkzeug.security import generate_password_hash, check_password_hash
