@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Barcode Scanner</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .container {
+      background-color: rgba(0, 0, 0, 0.6);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+      max-width: 400px;
+      text-align: center;
+    }
+
+    h2 {
+      margin-bottom: 20px;
+      font-size: 28px;
+      font-weight: 600;
+    }
+
+    input[type="text"] {
+      padding: 12px;
+      width: 100%;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      background-color: #00c6ff;
+      background-image: linear-gradient(to right, #0072ff, #00c6ff);
+      border: none;
+      padding: 12px 20px;
+      color: white;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    button:hover {
+      background-image: linear-gradient(to right, #00c6ff, #0072ff);
+    }
+
+    a {
+      display: inline-block;
+      margin-top: 20px;
+      color: #00c6ff;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    p {
+      margin-top: 15px;
+      font-size: 16px;
+    }
+
+    .status-exit {
+      color: #f1c40f;
+    }
+
+    .status-entry {
+      color: #2ecc71;
+    }
+
+    .status-late {
+      color: #e74c3c;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Student Barcode Scanner</h2>
+    <form method="POST">
+      <input type="text" name="barcode" placeholder="Scan or Enter Barcode" required />
+      <br><br>
+      <button type="submit">Check Student</button>
+    </form>
+
+    {% if student_name %}
+      <p><strong>Student Name:</strong> {{ student_name }}</p>
+      <p><strong>Roll No:</strong> {{ roll_no }}</p>
+      {% if status == "Exited record" %}
+        <p class="status-exit"><strong>Status: Exited the Classroom</strong></p>
+      {% elif status == "Entered record" %}
+        <p class="status-entry"><strong>Status: Returned to the Classroom</strong></p>
+      {% elif status == "Returned late" %}
+        <p class="status-late"><strong>Status: Returned Late</strong></p>
+      {% else %}
+        <p><strong>Status:</strong> {{ status }}</p>
+      {% endif %}
+    {% elif error %}
+      <p style="color: red;"><strong>{{ error }}</strong></p>
+    {% endif %}
+
+    <br>
+    <a href="/logout">Logout</a>
+  </div>
+</body>
+</html>
