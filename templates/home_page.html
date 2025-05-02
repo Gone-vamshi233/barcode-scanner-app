@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Class Bunk Alert System</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), 
+        url('https://previews.123rf.com/images/stockbroker/stockbroker1411/stockbroker141103284/33603902-student-struggling-in-class.jpg') no-repeat center center fixed;
+      background-size: cover;
+      color: white;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 60px;
+      letter-spacing: 2px;
+      animation: glow 3s ease-in-out infinite alternate;
+      color: #ffffff;
+      text-shadow: 0 0 10px #00e5ff, 0 0 20px #00e5ff, 0 0 30px #00e5ff;
+      margin-bottom: 20px;
+    }
+
+    @keyframes glow {
+      from {
+        text-shadow: 0 0 5px #00e5ff, 0 0 10px #00e5ff;
+        transform: scale(1);
+      }
+      to {
+        text-shadow: 0 0 20px #42a5f5, 0 0 40px #00e5ff;
+        transform: scale(1.05);
+      }
+    }
+
+    .description {
+      font-size: 20px;
+      max-width: 700px;
+      background-color: rgba(255, 255, 255, 0.1);
+      padding: 15px 25px;
+      border-radius: 12px;
+      backdrop-filter: blur(4px);
+      margin-bottom: 30px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn {
+      background-color: #ff6f00;
+      border: none;
+      padding: 14px 24px;
+      font-size: 16px;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      background-color: #e65100;
+      transform: scale(1.05);
+      box-shadow: 0 0 15px #ffa726;
+    }
+
+    @media (max-width: 600px) {
+      h1 {
+        font-size: 40px;
+      }
+      .description {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Class Bunk Alert System</h1>
+  <div class="description">
+    Track student attendance through scan logs. Instantly alert authorities if students miss class. Prevent unauthorized exits and ensure safety.
+  </div>
+  <div class="btn-group">
+    <a href="/login" class="btn">Login</a>
+    <a href="/signup" class="btn">Sign Up</a>
+    <a href="/support" class="btn">Contact Support</a>
+  </div>
+</body>
+</html>
