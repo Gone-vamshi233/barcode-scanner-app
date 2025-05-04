@@ -200,4 +200,4 @@ scheduler.add_job(check_student_timeouts, 'interval', seconds=30)
 scheduler.start()
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
