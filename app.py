@@ -1,17 +1,22 @@
 from flask import Flask, render_template, redirect, url_for, request, flash
-from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
-from flask_bcrypt import Bcrypt
-from flask_mail import Mail, Message
-from twilio.rest import Client
-from apscheduler.schedulers.background import BackgroundScheduler
+from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from twilio.rest import Client
 import sqlite3
 import pandas as pd
+import os
+
+# Load environment variables
+load_dotenv()
+
+# Flask app
 app = Flask(__name__)
 app.secret_key = '1436'
 
-# Allowed emails for access
+# Allowed logins
 ALLOWED_EMAILS = {
     'gonevamshi43@gmail.com',
     'gonevamshi201@gmail.com',
@@ -19,28 +24,19 @@ ALLOWED_EMAILS = {
     's.vaishnavi@cmrcet.ac.in'
 }
 
-# Login manager and password hashing
+# Flask-Login setup
 login_manager = LoginManager(app)
-bcrypt = Bcrypt(app)
-
-# Mail setup (if used)
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'gonevamshi201@gmail.com'
-app.config['MAIL_PASSWORD'] = 'Gone vamshi123'
-mail = Mail(app)
 
 # Twilio setup
-twilio_account_sid = 'AC3bd8c0b3854131e8bc650d5a02c18efd'
-twilio_auth_token = '6873a5c06efeda99f63008882d7916d6'
-twilio_phone_number = '+12098120571'
+twilio_account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+twilio_auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+twilio_phone_number = os.getenv('TWILIO_PHONE_NUMBER')
 twilio_client = Client(twilio_account_sid, twilio_auth_token)
 
-# Barcode tracker: barcode -> (name, roll, exit_time)
+# In-memory tracker: {barcode: (name, roll_no, exit_time, alert_sent)}
 barcode_tracker = {}
 
-# Initialize database
+# Database initialization
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
@@ -54,7 +50,7 @@ def init_db():
 
 init_db()
 
-# User class for Flask-Login
+# User model
 class User(UserMixin):
     def __init__(self, id, email, password):
         self.id = id
@@ -66,10 +62,10 @@ class User(UserMixin):
         conn = sqlite3.connect('users.db')
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE email = ?", (email,))
-        user = c.fetchone()
+        row = c.fetchone()
         conn.close()
-        if user:
-            return User(user[0], user[1], user[2])
+        if row:
+            return User(*row)
         return None
 
 @login_manager.user_loader
@@ -77,32 +73,21 @@ def load_user(user_id):
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-    user = c.fetchone()
+    row = c.fetchone()
     conn.close()
-    if user:
-        return User(user[0], user[1], user[2])
+    if row:
+        return User(*row)
     return None
 
-# ========== Routes ==========
-
 @app.route('/')
-def index():
-    return render_template('home_page.html')
-
-@app.route('/support')
-def support():
-    return render_template('Support_page.html')
-
-@app.route('/home')
-@login_required
 def home():
-    return redirect(url_for('scanner'))
+    return render_template('home_page.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
+        email = request.form['email'].strip()
+        password = request.form['password'].strip()
 
         if email not in ALLOWED_EMAILS:
             flash('You are not authorized to log in.')
@@ -112,26 +97,27 @@ def login():
         if user and check_password_hash(user.password, password):
             login_user(user)
             return redirect(url_for('scanner'))
-        else:
-            flash('Invalid credentials.')
+        flash('Invalid credentials.')
     return render_template('login_page.html')
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
-        email = request.form['email']
-        password = generate_password_hash(request.form['password'], method='pbkdf2:sha256')
+        email = request.form['email'].strip()
+        password = request.form['password'].strip()
+        hashed_pw = generate_password_hash(password)
 
         conn = sqlite3.connect('users.db')
         c = conn.cursor()
         try:
-            c.execute("INSERT INTO users (email, password) VALUES (?, ?)", (email, password))
+            c.execute("INSERT INTO users (email, password) VALUES (?, ?)", (email, hashed_pw))
             conn.commit()
-            flash('Signup successful! Please log in.')
+            flash("Signup successful. Please log in.")
             return redirect(url_for('login'))
         except sqlite3.IntegrityError:
-            flash('Email already exists.')
-        conn.close()
+            flash("Email already exists.")
+        finally:
+            conn.close()
     return render_template('signup_page.html')
 
 @app.route('/logout')
@@ -150,73 +136,68 @@ def scanner():
 
     if request.method == 'POST':
         barcode = request.form['barcode'].strip()
-
         try:
             df = pd.read_excel('Book.xlsx', dtype=str)
-            normalized_columns = {col.strip().lower(): col for col in df.columns}
-
-            required_cols = ['barcode', 'name', 'rollno']
-            if all(col in normalized_columns for col in required_cols):
-                barcode_col = normalized_columns['barcode']
-                name_col = normalized_columns['name']
-                rollno_col = normalized_columns['rollno']
-
-                match = df[df[barcode_col] == barcode]
+            df.columns = df.columns.str.strip().str.lower()
+            if {'barcode', 'name', 'rollno'}.issubset(df.columns):
+                match = df[df['barcode'] == barcode]
                 if not match.empty:
-                    student_name = match.iloc[0][name_col]
-                    roll_no = match.iloc[0][rollno_col]
+                    student_name = match.iloc[0]['name']
+                    roll_no = match.iloc[0]['rollno']
                     now = datetime.now()
 
                     if barcode not in barcode_tracker:
-                        barcode_tracker[barcode] = (student_name, roll_no, now)
+                        barcode_tracker[barcode] = (student_name, roll_no, now, False)
                         status = "Exited record"
                     else:
-                        exit_time = barcode_tracker[barcode][2]
+                        exit_time, alert_sent = barcode_tracker[barcode][2], barcode_tracker[barcode][3]
                         if now - exit_time <= timedelta(minutes=2):
-                            status = "Entered record"
+                            status = "Successfully returned"
                         else:
-                            status = "Returned late (SMS already sent if exceeded 2 mins)"
+                            status = "Returned late"
                         del barcode_tracker[barcode]
                 else:
                     error = "Barcode not found in Excel."
             else:
-                error = "Excel must have columns: Barcode, Name, and RollNo."
+                error = "Missing columns: barcode, name, rollno"
         except FileNotFoundError:
             error = "Excel file 'Book.xlsx' not found."
         except Exception as e:
-            error = f"Error reading Excel: {str(e)}"
+            error = f"Error: {str(e)}"
 
-    return render_template(
-        'scanner_page.html',
-        student_name=student_name,
-        roll_no=roll_no,
-        status=status,
-        error=error
-    )
+    return render_template('scanner_page.html', student_name=student_name, roll_no=roll_no, status=status, error=error)
 
-# ========== Background Task ==========
+@app.route('/support')
+def support():
+    return render_template('support_page.html')
 
-scheduler = BackgroundScheduler()
-
+# Background job: checks timeouts and sends SMS ONCE
 def check_student_timeouts():
     now = datetime.now()
-    expired_barcodes = []
-    for barcode, (student_name, roll_no, exit_time) in barcode_tracker.items():
-        if now - exit_time > timedelta(minutes=2):
-            # Send SMS
-            twilio_client.messages.create(
-                body=f"{student_name} (Roll No: {roll_no}) did not return within 2 minutes.",
-                from_=twilio_phone_number,
-                to='+919010741795'
-            )
-            expired_barcodes.append(barcode)
-    for barcode in expired_barcodes:
+    expired = []
+    for barcode, (name, roll, exit_time, alert_sent) in barcode_tracker.items():
+        if now - exit_time > timedelta(minutes=2) and not alert_sent:
+            try:
+                # Send SMS
+                twilio_client.messages.create(
+                    body=f"ALERT:🚨 {name} (Roll No: {roll}) did not return within 2 minutes.",
+                    from_=twilio_phone_number,
+                    to='+919010741795', # Replace with the actual recipient number
+                )
+                barcode_tracker[barcode] = (name, roll, exit_time, True)
+                print(f"SMS sent for {roll}")
+                expired.append(barcode)
+            except Exception as e:
+                print(f"Error sending SMS for {roll}: {e}")
+
+    # Remove expired barcodes from tracker
+    for barcode in expired:
         del barcode_tracker[barcode]
 
+# Scheduler
+scheduler = BackgroundScheduler()
 scheduler.add_job(check_student_timeouts, 'interval', seconds=30)
 scheduler.start()
 
-# ========== Main ==========
-
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)
