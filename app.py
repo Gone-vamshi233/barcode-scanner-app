@@ -14,7 +14,12 @@ load_dotenv()
 
 # Flask app
 app = Flask(__name__)
-app.secret_key = '1436'
+app.secret_key = os.getenv('secret_key', 'default_secret_key')
+
+@app.route('/test-env')
+def test_env():
+    twilio_sid = os.getenv('TWILIO_ACCOUNT_SID')
+    return f'TWILIO_ACCOUNT_SID is: {twilio_sid}'
 
 # Allowed logins
 ALLOWED_EMAILS = {
@@ -33,10 +38,10 @@ twilio_auth_token = os.getenv('TWILIO_AUTH_TOKEN')
 twilio_phone_number = os.getenv('TWILIO_PHONE_NUMBER')
 twilio_client = Client(twilio_account_sid, twilio_auth_token)
 
-# In-memory tracker: {barcode: (name, roll_no, exit_time, alert_sent)}
+# In-memory barcode tracker
 barcode_tracker = {}
 
-# Database initialization
+# Database setup
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
@@ -171,33 +176,38 @@ def scanner():
 def support():
     return render_template('support_page.html')
 
-# Background job: checks timeouts and sends SMS ONCE
+# 🔁 SMS sending helper function
+def send_sms_alert(name, roll):
+    try:
+        to_number = os.getenv('TO_PHONE_NUMBER')
+        if not to_number:
+            print("TO_PHONE_NUMBER environment variable not set.")
+            return
+        message = twilio_client.messages.create(
+            body=f"ALERT:🚨 {name} (Roll No: {roll}) did not return within 2 minutes.",
+            from_=twilio_phone_number,
+            to=to_number,
+        )
+        print(f"SMS sent to {to_number} for {roll}: SID {message.sid}")
+    except Exception as e:
+        print(f"Error sending SMS for {roll}: {e}")
+
+# ⏰ Background job
 def check_student_timeouts():
     now = datetime.now()
     expired = []
     for barcode, (name, roll, exit_time, alert_sent) in barcode_tracker.items():
         if now - exit_time > timedelta(minutes=2) and not alert_sent:
-            try:
-                # Send SMS
-                twilio_client.messages.create(
-                    body=f"ALERT:🚨 {name} (Roll No: {roll}) did not return within 2 minutes.",
-                    from_=twilio_phone_number,
-                    to='+919010741795', # Replace with the actual recipient number
-                )
-                barcode_tracker[barcode] = (name, roll, exit_time, True)
-                print(f"SMS sent for {roll}")
-                expired.append(barcode)
-            except Exception as e:
-                print(f"Error sending SMS for {roll}: {e}")
-
-    # Remove expired barcodes from tracker
+            send_sms_alert(name, roll)
+            barcode_tracker[barcode] = (name, roll, exit_time, True)
+            expired.append(barcode)
     for barcode in expired:
         del barcode_tracker[barcode]
 
-# Scheduler
+# Scheduler setup (will be started later)
 scheduler = BackgroundScheduler()
 scheduler.add_job(check_student_timeouts, 'interval', seconds=30)
 scheduler.start()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+    app.run(debug=True)
