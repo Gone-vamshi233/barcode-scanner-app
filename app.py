@@ -203,5 +203,9 @@ def check_student_timeouts():
             expired.append(barcode)
     for barcode in expired:
         del barcode_tracker[barcode]
+        # Scheduler setup (will be started later)
+scheduler = BackgroundScheduler()
+scheduler.add_job(check_student_timeouts, 'interval', seconds=30)
+scheduler.start()
 if __name__ == '__main__':
     app.run(debug=True)
