@@ -1,14 +1,16 @@
 services:
   - type: web
-    name: barcode-scanner
+    name: barcode-scanner-web
     env: python
-    plan: free
-    buildCommand: "pip install -r requirements.txt"  # Install dependencies
-    startCommand: "flask run --host 0.0.0.0"  # Start the Flask app
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app  # Updated to match your app.py
+    envVars:
+      - fromGroup: barcode-env  # This should match the name of your env group in Render
 
   - type: worker
     name: barcode-scanner-worker
     env: python
-    plan: free
-    buildCommand: "pip install -r requirements.txt"  # Install dependencies for worker
-    startCommand: "python worker.py"  # Start the worker process (scheduler)
+    buildCommand: pip install -r requirements.txt
+    startCommand: python worker.py
+    envVars:
+      - fromGroup: barcode-env
