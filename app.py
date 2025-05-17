@@ -12,14 +12,8 @@ import os
 # Load environment variables
 load_dotenv()
 
-# Flask app
 app = Flask(__name__)
 app.secret_key = os.getenv('secret_key', 'default_secret_key')
-
-@app.route('/test-env')
-def test_env():
-    twilio_sid = os.getenv('TWILIO_ACCOUNT_SID')
-    return f'TWILIO_ACCOUNT_SID is: {twilio_sid}'
 
 # Allowed logins
 ALLOWED_EMAILS = {
@@ -38,7 +32,7 @@ twilio_auth_token = os.getenv('TWILIO_AUTH_TOKEN')
 twilio_phone_number = os.getenv('TWILIO_PHONE_NUMBER')
 twilio_client = Client(twilio_account_sid, twilio_auth_token)
 
-# In-memory barcode tracker
+# In-memory barcode tracker: {barcode: (name, roll, exit_time, alert_sent)}
 barcode_tracker = {}
 
 # Database setup
@@ -152,9 +146,11 @@ def scanner():
                     now = datetime.now()
 
                     if barcode not in barcode_tracker:
+                        # Student exiting: add entry with alert_sent = False
                         barcode_tracker[barcode] = (student_name, roll_no, now, False)
                         status = "Exited record"
                     else:
+                        # Student returning: check timing
                         exit_time, alert_sent = barcode_tracker[barcode][2], barcode_tracker[barcode][3]
                         if now - exit_time <= timedelta(minutes=2):
                             status = "Successfully returned"
@@ -176,7 +172,7 @@ def scanner():
 def support():
     return render_template('support_page.html')
 
-# 🔁 SMS sending helper function
+# SMS sending helper
 def send_sms_alert(name, roll):
     try:
         to_number = os.getenv('TO_PHONE_NUMBER')
@@ -192,20 +188,26 @@ def send_sms_alert(name, roll):
     except Exception as e:
         print(f"Error sending SMS for {roll}: {e}")
 
-# ⏰ Background job
+# Background job for timeout checking
 def check_student_timeouts():
     now = datetime.now()
     expired = []
-    for barcode, (name, roll, exit_time, alert_sent) in barcode_tracker.items():
+    for barcode, (name, roll, exit_time, alert_sent) in list(barcode_tracker.items()):
         if now - exit_time > timedelta(minutes=2) and not alert_sent:
             send_sms_alert(name, roll)
-            barcode_tracker[barcode] = (name, roll, exit_time, True)
+            barcode_tracker[barcode] = (name, roll, exit_time, True)  # Mark alert sent
             expired.append(barcode)
     for barcode in expired:
         del barcode_tracker[barcode]
-        # Scheduler setup (will be started later)
+
+# Scheduler setup
 scheduler = BackgroundScheduler()
 scheduler.add_job(check_student_timeouts, 'interval', seconds=30)
 scheduler.start()
+
+# Clean shutdown of scheduler when Flask app stops
+import atexit
+atexit.register(lambda: scheduler.shutdown())
+
 if __name__ == '__main__':
     app.run(debug=True)
