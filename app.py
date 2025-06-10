@@ -39,14 +39,24 @@ barcode_tracker = {}
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
+    # User table
     c.execute('''CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL
     )''')
+
+    # Exit tracking table
+    c.execute('''CREATE TABLE IF NOT EXISTS exit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barcode TEXT,
+        name TEXT,
+        roll TEXT,
+        exit_time TEXT,
+        alert_sent INTEGER DEFAULT 0
+    )''')
     conn.commit()
     conn.close()
-
 init_db()
 
 # User model
