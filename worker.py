@@ -3,12 +3,12 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from twilio.rest import Client
 import os
 import sqlite3
-
-# Load environment variables if needed
 from dotenv import load_dotenv
+
+# Load environment variables
 load_dotenv()
 
-# Twilio config from environment
+# Twilio setup
 twilio_client = Client(
     os.environ['TWILIO_ACCOUNT_SID'],
     os.environ['TWILIO_AUTH_TOKEN']
@@ -16,33 +16,38 @@ twilio_client = Client(
 twilio_phone_number = os.environ['TWILIO_PHONE_NUMBER']
 alert_phone_number = os.environ.get('ALERT_PHONE_NUMBER', '+919010741795')
 
-# --- DATABASE BARCODE TRACKER ---
-# If you're using a DB to store exit times, fetch data here.
-# For this version, we simulate in-memory (should move to Redis or DB for production)
-
-barcode_tracker = {
-    # Example: 'ABC123': ('John Doe', '21IT123', datetime.now() - timedelta(minutes=3))
-}
-
+# Worker function
 def check_student_timeouts():
     now = datetime.now()
-    expired_barcodes = []
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
 
-    for barcode, (student_name, roll_no, exit_time) in barcode_tracker.items():
+    # Get all students who exited but not alerted yet
+    c.execute("SELECT id, name, roll, exit_time FROM exit_logs WHERE alert_sent = 0")
+    rows = c.fetchall()
+
+    for row in rows:
+        log_id, name, roll, exit_time_str = row
+        exit_time = datetime.fromisoformat(exit_time_str)
         if now - exit_time > timedelta(minutes=2):
-            twilio_client.messages.create(
-                body=f"🚨 {student_name} (Roll No: {roll_no}) did not return within 2 minutes.",
-                from_=twilio_phone_number,
-                to=alert_phone_number
-            )
-            expired_barcodes.append(barcode)
+            try:
+                twilio_client.messages.create(
+                    body=f"🚨 {name} (Roll No: {roll}) did not return within 2 minutes.",
+                    from_=twilio_phone_number,
+                    to=alert_phone_number
+                )
+                print(f"✅ SMS sent to {alert_phone_number} for {roll}")
+                c.execute("UPDATE exit_logs SET alert_sent = 1 WHERE id = ?", (log_id,))
+                conn.commit()
+            except Exception as e:
+                print(f"❌ Error sending SMS for {roll}: {e}")
 
-    for barcode in expired_barcodes:
-        del barcode_tracker[barcode]
+    conn.close()
 
+# Scheduler setup
 scheduler = BlockingScheduler()
 scheduler.add_job(check_student_timeouts, 'interval', seconds=30)
 
 if __name__ == '__main__':
-    print("🔄 Starting Scheduler...")
+    print("🔄 Starting SMS Worker...")
     scheduler.start()
