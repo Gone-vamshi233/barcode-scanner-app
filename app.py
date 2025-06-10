@@ -145,18 +145,30 @@ def scanner():
                     roll_no = match.iloc[0]['rollno']
                     now = datetime.now()
 
-                    if barcode not in barcode_tracker:
-                        # Student exiting: add entry with alert_sent = False
-                        barcode_tracker[barcode] = (student_name, roll_no, now, False)
+                    conn = sqlite3.connect('users.db')
+                    c = conn.cursor()
+
+                    # Check if there's an unreturned exit log
+                    c.execute("SELECT * FROM exit_logs WHERE barcode = ? AND alert_sent = 0", (barcode,))
+                    existing = c.fetchone()
+
+                    if not existing:
+                        # Student is exiting
+                        c.execute("INSERT INTO exit_logs (barcode, name, roll, exit_time) VALUES (?, ?, ?, ?)",
+                                  (barcode, student_name, roll_no, now.isoformat()))
                         status = "Exited record"
                     else:
-                        # Student returning: check timing
-                        exit_time, alert_sent = barcode_tracker[barcode][2], barcode_tracker[barcode][3]
+                        # Student is returning
+                        exit_time_str = existing[4]
+                        exit_time = datetime.fromisoformat(exit_time_str)
                         if now - exit_time <= timedelta(minutes=2):
                             status = "Successfully returned"
                         else:
                             status = "Returned late"
-                        del barcode_tracker[barcode]
+                        c.execute("UPDATE exit_logs SET alert_sent = 1 WHERE id = ?", (existing[0],))
+
+                    conn.commit()
+                    conn.close()
                 else:
                     error = "Barcode not found in Excel."
             else:
@@ -167,7 +179,6 @@ def scanner():
             error = f"Error: {str(e)}"
 
     return render_template('scanner_page.html', student_name=student_name, roll_no=roll_no, status=status, error=error)
-
 @app.route('/support')
 def support():
     return render_template('support_page.html')
